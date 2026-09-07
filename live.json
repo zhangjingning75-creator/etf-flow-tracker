@@ -1,1 +1,6 @@
 
+{
+  "updated_at": null,
+  "btc": {"price": null, "change_24h": null},
+  "eth": {"price": null, "change_24h": null}
+}
