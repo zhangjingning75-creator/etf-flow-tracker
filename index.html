@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>比特币ETF资金流终端</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: #f4f3ee; color: #1a1a18; max-width: 760px; margin: 0 auto; padding: 24px 16px 60px; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+  .sub { font-size: 13px; color: #6b6a63; margin: 0 0 20px; }
+  .hero { font-family: monospace; font-size: 30px; font-weight: 600; color: #185fa5; margin: 4px 0; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 16px 0 24px; }
+  .card { background: #fff; border-radius: 10px; padding: 12px 14px; border: 1px solid #e4e2da; }
+  .card .label { font-size: 12px; color: #6b6a63; }
+  .card .value { font-family: monospace; font-size: 17px; font-weight: 600; margin-top: 2px; }
+  .toggle { display: flex; gap: 6px; margin: 20px 0 8px; }
+  .toggle button { padding: 6px 16px; font-size: 13px; border-radius: 8px; border: 1px solid #d3d1c7; background: #fff; cursor: pointer; }
+  .toggle button.active { background: #1a1a18; color: #fff; border-color: #1a1a18; }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: #6b6a63; margin: 12px 0 4px; }
+  .legend span { display: flex; align-items: center; gap: 4px; }
+  .dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .chart-wrap { position: relative; width: 100%; height: 260px; background: #fff; border-radius: 10px; border: 1px solid #e4e2da; padding: 12px; box-sizing: border-box; }
+  .updated { font-size: 11px; color: #9a988f; margin-top: 16px; }
+  .error { background: #fbeaea; border: 1px solid #f0c0c0; color: #a33; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none; }
+</style>
+</head>
+<body>
+  <h1>比特币现货ETF资金流终端</h1>
+  <p class="sub">数据来源：TFTC / SoSoValue 每日汇总（个人自用，非投资建议）</p>
+
+  <div class="error" id="errBox">数据加载失败，正在显示上次成功保存的数据（如果是第一次打开，说明 data.json 还没有生成，请检查 GitHub Actions 是否运行过）。</div>
+
+  <div class="hero" id="heroValue">--</div>
+  <div class="sub" id="heroDate">加载中...</div>
+
+  <div class="cards">
+    <div class="card"><div class="label">近30日净流入</div><div class="value" id="stat30">--</div></div>
+    <div class="card"><div class="label">近90日净流入</div><div class="value" id="stat90">--</div></div>
+    <div class="card"><div class="label">最大单日流入</div><div class="value" id="statMaxIn">--</div></div>
+    <div class="card"><div class="label">最大单日流出</div><div class="value" id="statMaxOut">--</div></div>
+  </div>
+
+  <div class="toggle" id="rangeToggle">
+    <button data-range="day" class="active">日</button>
+    <button data-range="week">周</button>
+    <button data-range="month">月</button>
+  </div>
+  <div class="legend">
+    <span><span class="dot" style="background:#1baf7a"></span>净流入</span>
+    <span><span class="dot" style="background:#e34948"></span>净流出</span>
+  </div>
+  <div class="chart-wrap">
+    <canvas id="flowChart" role="img" aria-label="比特币现货ETF每日净流入流出柱状图"></canvas>
+  </div>
+
+  <div class="updated" id="updatedAt"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+function fmt(v) {
+  const sign = v < 0 ? '-' : '+';
+  return sign + '$' + Math.abs(v).toFixed(1) + 'M';
+}
+function toWeeks(rows) {
+  const map = {};
+  rows.forEach(r => {
+    const d = new Date(r.date);
+    const onejan = new Date(d.getFullYear(), 0, 1);
+    const week = Math.ceil((((d - onejan) / 86400000) + onejan.getDay() + 1) / 7);
+    const key = d.getFullYear() + '-W' + week;
+    map[key] = (map[key] || 0) + r.flow;
+  });
+  return Object.entries(map).map(([k, v]) => ({ date: k, flow: v }));
+}
+function toMonths(rows) {
+  const map = {};
+  rows.forEach(r => {
+    const key = r.date.slice(0, 7);
+    map[key] = (map[key] || 0) + r.flow;
+  });
+  return Object.entries(map).map(([k, v]) => ({ date: k, flow: v }));
+}
+
+let chart, allRows = [];
+
+function render(range) {
+  let rows = allRows;
+  if (range === 'week') rows = toWeeks(allRows);
+  if (range === 'month') rows = toMonths(allRows);
+  const labels = rows.map(r => r.date);
+  const values = rows.map(r => Math.round(r.flow * 10) / 10);
+  const colors = values.map(v => v >= 0 ? '#1baf7a' : '#e34948');
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('flowChart'), {
+    type: 'bar',
+    data: { labels, datasets: [{ data: values, backgroundColor: colors, borderRadius: 4, maxBarThickness: range === 'day' ? 14 : 26 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => fmt(c.raw) } } },
+      scales: {
+        x: { ticks: { autoSkip: range !== 'day', maxRotation: 45, font: { size: 10 } }, grid: { display: false } },
+        y: { ticks: { callback: v => fmt(v).replace('.0', '') }, grid: { color: '#e4e2da' } }
+      }
+    }
+  });
+}
+
+function computeStats(rows) {
+  const now = new Date(rows[rows.length - 1].date);
+  const sumSince = days => {
+    const cutoff = new Date(now); cutoff.setDate(cutoff.getDate() - days);
+    return rows.filter(r => new Date(r.date) >= cutoff).reduce((a, r) => a + r.flow, 0);
+  };
+  const maxIn = Math.max(...rows.map(r => r.flow));
+  const maxOut = Math.min(...rows.map(r => r.flow));
+  document.getElementById('stat30').textContent = fmt(sumSince(30));
+  document.getElementById('stat90').textContent = fmt(sumSince(90));
+  document.getElementById('statMaxIn').textContent = fmt(maxIn);
+  document.getElementById('statMaxOut').textContent = fmt(maxOut);
+  const last = rows[rows.length - 1];
+  document.getElementById('heroValue').textContent = fmt(last.flow);
+  document.getElementById('heroDate').textContent = '最新交易日 ' + last.date;
+}
+
+document.querySelectorAll('#rangeToggle button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#rangeToggle button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    render(btn.dataset.range);
+  });
+});
+
+fetch('./data.json?t=' + Date.now())
+  .then(r => { if (!r.ok) throw new Error('no data.json'); return r.json(); })
+  .then(json => {
+    allRows = json.rows;
+    computeStats(allRows);
+    render('day');
+    document.getElementById('updatedAt').textContent = '数据更新时间：' + (json.updated_at || '未知');
+  })
+  .catch(err => {
+    document.getElementById('errBox').style.display = 'block';
+    console.error(err);
+  });
+</script>
+</body>
+</html>
