@@ -1,0 +1,36 @@
+name: 每日更新ETF数据
+
+on:
+  schedule:
+    - cron: "0 12 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 拉取仓库代码
+        uses: actions/checkout@v4
+
+      - name: 安装Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 运行抓取脚本
+        run: python scripts/update_data.py
+
+      - name: 提交更新后的data.json
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet data.json; then
+            echo "数据没有变化，不需要提交。"
+          else
+            git add data.json
+            git commit -m "自动更新ETF流入流出数据"
+            git push
+          fi
