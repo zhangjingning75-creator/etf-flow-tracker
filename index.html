@@ -3,32 +3,40 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>比特币ETF资金流终端</title>
+<title>加密ETF与市场数据终端</title>
 <style>
-  body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: #f4f3ee; color: #1a1a18; max-width: 760px; margin: 0 auto; padding: 24px 16px 60px; }
+  body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; background: #f4f3ee; color: #1a1a18; max-width: 820px; margin: 0 auto; padding: 24px 16px 60px; }
   h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
-  .sub { font-size: 13px; color: #6b6a63; margin: 0 0 20px; }
-  .hero { font-family: monospace; font-size: 30px; font-weight: 600; color: #185fa5; margin: 4px 0; }
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 16px 0 24px; }
+  h2 { font-size: 16px; font-weight: 600; margin: 36px 0 4px; }
+  .sub { font-size: 13px; color: #6b6a63; margin: 0 0 16px; }
+  .hero { font-family: monospace; font-size: 28px; font-weight: 600; color: #185fa5; margin: 4px 0; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 14px 0 20px; }
   .card { background: #fff; border-radius: 10px; padding: 12px 14px; border: 1px solid #e4e2da; }
   .card .label { font-size: 12px; color: #6b6a63; }
   .card .value { font-family: monospace; font-size: 17px; font-weight: 600; margin-top: 2px; }
-  .toggle { display: flex; gap: 6px; margin: 20px 0 8px; }
-  .toggle button { padding: 6px 16px; font-size: 13px; border-radius: 8px; border: 1px solid #d3d1c7; background: #fff; cursor: pointer; }
-  .toggle button.active { background: #1a1a18; color: #fff; border-color: #1a1a18; }
-  .legend { display: flex; gap: 16px; font-size: 12px; color: #6b6a63; margin: 12px 0 4px; }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0; }
+  .row button { padding: 6px 14px; font-size: 13px; border-radius: 8px; border: 1px solid #d3d1c7; background: #fff; cursor: pointer; }
+  .row button.active { background: #1a1a18; color: #fff; border-color: #1a1a18; }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: #6b6a63; margin: 10px 0 4px; }
   .legend span { display: flex; align-items: center; gap: 4px; }
   .dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
   .chart-wrap { position: relative; width: 100%; height: 260px; background: #fff; border-radius: 10px; border: 1px solid #e4e2da; padding: 12px; box-sizing: border-box; }
-  .updated { font-size: 11px; color: #9a988f; margin-top: 16px; }
-  .error { background: #fbeaea; border: 1px solid #f0c0c0; color: #a33; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 16px; display: none; }
+  .updated { font-size: 11px; color: #9a988f; margin-top: 10px; }
+  .gauge { display: flex; align-items: baseline; gap: 10px; }
+  .gauge .num { font-family: monospace; font-size: 34px; font-weight: 700; }
+  .gauge .label { font-size: 14px; padding: 4px 10px; border-radius: 999px; background: #eee; }
 </style>
 </head>
 <body>
-  <h1>比特币现货ETF资金流终端</h1>
-  <p class="sub">数据来源：TFTC / SoSoValue 每日汇总（个人自用，非投资建议）</p>
+  <h1>加密ETF与市场数据终端</h1>
+  <p class="sub">个人自用面板，非投资建议 · 数据来源见各图表下方</p>
 
-  <div class="error" id="errBox">数据加载失败，正在显示上次成功保存的数据（如果是第一次打开，说明 data.json 还没有生成，请检查 GitHub Actions 是否运行过）。</div>
+  <!-- ============ ETF资金流 ============ -->
+  <h2>现货ETF资金流</h2>
+  <div class="row" id="assetToggle">
+    <button data-asset="btc_etf" class="active">BTC</button>
+    <button data-asset="eth_etf">ETH</button>
+  </div>
 
   <div class="hero" id="heroValue">--</div>
   <div class="sub" id="heroDate">加载中...</div>
@@ -40,20 +48,58 @@
     <div class="card"><div class="label">最大单日流出</div><div class="value" id="statMaxOut">--</div></div>
   </div>
 
-  <div class="toggle" id="rangeToggle">
+  <div class="row" id="rangeToggle">
     <button data-range="day" class="active">日</button>
     <button data-range="week">周</button>
     <button data-range="month">月</button>
+    <button data-range="year">年</button>
+  </div>
+  <div class="row" id="typeToggle">
+    <button data-type="bar" class="active">柱状图</button>
+    <button data-type="line">折线图</button>
   </div>
   <div class="legend">
     <span><span class="dot" style="background:#1baf7a"></span>净流入</span>
     <span><span class="dot" style="background:#e34948"></span>净流出</span>
   </div>
-  <div class="chart-wrap">
-    <canvas id="flowChart" role="img" aria-label="比特币现货ETF每日净流入流出柱状图"></canvas>
-  </div>
+  <div class="chart-wrap"><canvas id="flowChart"></canvas></div>
+  <div class="updated" id="flowUpdated"></div>
 
-  <div class="updated" id="updatedAt"></div>
+  <!-- ============ 实时价格 ============ -->
+  <h2>实时现货价格</h2>
+  <div class="cards" id="liveCards">
+    <div class="card"><div class="label">BTC</div><div class="value" id="liveBtcPrice">--</div><div class="sub" id="liveBtcChange" style="margin:2px 0 0"></div></div>
+    <div class="card"><div class="label">ETH</div><div class="value" id="liveEthPrice">--</div><div class="sub" id="liveEthChange" style="margin:2px 0 0"></div></div>
+  </div>
+  <div class="updated" id="liveUpdated">加载中...（每5分钟自动刷新一次，来源：CoinGecko）</div>
+
+  <!-- ============ 价格走势 ============ -->
+  <h2>现货价格走势</h2>
+  <div class="row" id="priceAssetToggle">
+    <button data-asset="btc" class="active">BTC</button>
+    <button data-asset="eth">ETH</button>
+  </div>
+  <div class="row" id="priceTypeToggle">
+    <button data-type="candle" class="active">K线图</button>
+    <button data-type="line">折线图</button>
+    <button data-type="curve">曲线图</button>
+  </div>
+  <div class="chart-wrap"><canvas id="priceChart"></canvas></div>
+  <div class="updated" id="priceUpdated">数据来源：CoinGecko（近90日，每日自动更新）</div>
+
+  <!-- ============ 恐慌贪婪指数 ============ -->
+  <h2>恐慌与贪婪指数</h2>
+  <div class="gauge">
+    <div class="num" id="fgValue">--</div>
+    <div class="label" id="fgLabel">--</div>
+  </div>
+  <div class="chart-wrap" style="height:180px;margin-top:12px"><canvas id="fgChart"></canvas></div>
+  <div class="updated" id="fgUpdated">数据来源：alternative.me（近90日，每日自动更新）</div>
+
+  <!-- ============ 美债收益率 ============ -->
+  <h2>10年期美债收益率</h2>
+  <div class="chart-wrap"><canvas id="yieldChart"></canvas></div>
+  <div class="updated" id="yieldUpdated">手动更新，变化较慢，建议每周更新一次</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
@@ -74,74 +120,182 @@ function toWeeks(rows) {
 }
 function toMonths(rows) {
   const map = {};
-  rows.forEach(r => {
-    const key = r.date.slice(0, 7);
-    map[key] = (map[key] || 0) + r.flow;
-  });
+  rows.forEach(r => { const key = r.date.slice(0, 7); map[key] = (map[key] || 0) + r.flow; });
+  return Object.entries(map).map(([k, v]) => ({ date: k, flow: v }));
+}
+function toYears(rows) {
+  const map = {};
+  rows.forEach(r => { const key = r.date.slice(0, 4); map[key] = (map[key] || 0) + r.flow; });
   return Object.entries(map).map(([k, v]) => ({ date: k, flow: v }));
 }
 
-let chart, allRows = [];
+/* ---------- ETF资金流 ---------- */
+let flowData = { btc_etf: [], eth_etf: [] };
+let flowChart, currentAsset = 'btc_etf', currentRange = 'day', currentType = 'bar';
 
-function render(range) {
-  let rows = allRows;
-  if (range === 'week') rows = toWeeks(allRows);
-  if (range === 'month') rows = toMonths(allRows);
+function renderFlow() {
+  let rows = flowData[currentAsset] || [];
+  if (currentRange === 'week') rows = toWeeks(rows);
+  if (currentRange === 'month') rows = toMonths(rows);
+  if (currentRange === 'year') rows = toYears(rows);
   const labels = rows.map(r => r.date);
   const values = rows.map(r => Math.round(r.flow * 10) / 10);
   const colors = values.map(v => v >= 0 ? '#1baf7a' : '#e34948');
-  if (chart) chart.destroy();
-  chart = new Chart(document.getElementById('flowChart'), {
-    type: 'bar',
-    data: { labels, datasets: [{ data: values, backgroundColor: colors, borderRadius: 4, maxBarThickness: range === 'day' ? 14 : 26 }] },
+  if (flowChart) flowChart.destroy();
+  const isBar = currentType === 'bar';
+  flowChart = new Chart(document.getElementById('flowChart'), {
+    type: isBar ? 'bar' : 'line',
+    data: { labels, datasets: [{
+      data: values,
+      backgroundColor: isBar ? colors : 'rgba(24,95,165,0.12)',
+      borderColor: isBar ? colors : '#185fa5',
+      borderRadius: isBar ? 4 : 0,
+      maxBarThickness: currentRange === 'day' ? 14 : 26,
+      fill: !isBar, tension: 0.3, pointRadius: isBar ? 0 : 2, borderWidth: isBar ? 0 : 2
+    }] },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => fmt(c.raw) } } },
       scales: {
-        x: { ticks: { autoSkip: range !== 'day', maxRotation: 45, font: { size: 10 } }, grid: { display: false } },
+        x: { ticks: { autoSkip: currentRange !== 'day', maxRotation: 45, font: { size: 10 } }, grid: { display: false } },
         y: { ticks: { callback: v => fmt(v).replace('.0', '') }, grid: { color: '#e4e2da' } }
       }
     }
   });
 }
 
-function computeStats(rows) {
+function computeStats() {
+  const rows = flowData[currentAsset] || [];
+  if (!rows.length) return;
   const now = new Date(rows[rows.length - 1].date);
   const sumSince = days => {
     const cutoff = new Date(now); cutoff.setDate(cutoff.getDate() - days);
     return rows.filter(r => new Date(r.date) >= cutoff).reduce((a, r) => a + r.flow, 0);
   };
-  const maxIn = Math.max(...rows.map(r => r.flow));
-  const maxOut = Math.min(...rows.map(r => r.flow));
   document.getElementById('stat30').textContent = fmt(sumSince(30));
   document.getElementById('stat90').textContent = fmt(sumSince(90));
-  document.getElementById('statMaxIn').textContent = fmt(maxIn);
-  document.getElementById('statMaxOut').textContent = fmt(maxOut);
+  document.getElementById('statMaxIn').textContent = fmt(Math.max(...rows.map(r => r.flow)));
+  document.getElementById('statMaxOut').textContent = fmt(Math.min(...rows.map(r => r.flow)));
   const last = rows[rows.length - 1];
   document.getElementById('heroValue').textContent = fmt(last.flow);
   document.getElementById('heroDate').textContent = '最新交易日 ' + last.date;
 }
 
-document.querySelectorAll('#rangeToggle button').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('#rangeToggle button').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    render(btn.dataset.range);
-  });
-});
+document.querySelectorAll('#assetToggle button').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('#assetToggle button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active'); currentAsset = btn.dataset.asset;
+  computeStats(); renderFlow();
+}));
+document.querySelectorAll('#rangeToggle button').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('#rangeToggle button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active'); currentRange = btn.dataset.range; renderFlow();
+}));
+document.querySelectorAll('#typeToggle button').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('#typeToggle button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active'); currentType = btn.dataset.type; renderFlow();
+}));
 
-fetch('./data.json?t=' + Date.now())
-  .then(r => { if (!r.ok) throw new Error('no data.json'); return r.json(); })
-  .then(json => {
-    allRows = json.rows;
-    computeStats(allRows);
-    render('day');
-    document.getElementById('updatedAt').textContent = '数据更新时间：' + (json.updated_at || '未知');
-  })
-  .catch(err => {
-    document.getElementById('errBox').style.display = 'block';
-    console.error(err);
+fetch('./data.json?t=' + Date.now()).then(r => r.json()).then(json => {
+  flowData.btc_etf = json.btc_etf || [];
+  flowData.eth_etf = json.eth_etf || [];
+  computeStats(); renderFlow();
+  document.getElementById('flowUpdated').textContent = '数据更新时间：' + (json.updated_at || '未知');
+}).catch(e => console.error('data.json加载失败', e));
+
+/* ---------- 价格K线/折线 ---------- */
+let marketData = { btc: [], eth: [] };
+let priceChart, priceAsset = 'btc', priceType = 'candle';
+
+function renderPrice() {
+  const rows = marketData[priceAsset] || [];
+  const labels = rows.map(r => r.date);
+  if (priceChart) priceChart.destroy();
+  if (priceType === 'line' || priceType === 'curve') {
+    const isCurve = priceType === 'curve';
+    priceChart = new Chart(document.getElementById('priceChart'), {
+      type: 'line',
+      data: { labels, datasets: [{ data: rows.map(r => r.c), borderColor: isCurve ? '#c9542b' : '#185fa5', backgroundColor: isCurve ? 'rgba(201,84,43,0.1)' : 'rgba(24,95,165,0.1)', fill: true, tension: isCurve ? 0.4 : 0, pointRadius: 0, borderWidth: 2 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+        scales: { x: { ticks: { autoSkip: true, font: { size: 10 } }, grid: { display: false } }, y: { ticks: { callback: v => '$' + v.toLocaleString() }, grid: { color: '#e4e2da' } } } }
+    });
+  } else {
+    const colors = rows.map(r => r.c >= r.o ? '#1baf7a' : '#e34948');
+    priceChart = new Chart(document.getElementById('priceChart'), {
+      type: 'bar',
+      data: { labels, datasets: [
+        { label: '影线', data: rows.map(r => [r.l, r.h]), backgroundColor: colors, barThickness: 2, borderSkipped: false },
+        { label: '实体', data: rows.map(r => [Math.min(r.o, r.c), Math.max(r.o, r.c)]), backgroundColor: colors, barThickness: 7, borderSkipped: false }
+      ]},
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+        scales: { x: { ticks: { autoSkip: true, font: { size: 10 } }, grid: { display: false } }, y: { ticks: { callback: v => '$' + v.toLocaleString() }, grid: { color: '#e4e2da' } } } }
+    });
+  }
+}
+document.querySelectorAll('#priceAssetToggle button').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('#priceAssetToggle button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active'); priceAsset = btn.dataset.asset; renderPrice();
+}));
+document.querySelectorAll('#priceTypeToggle button').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('#priceTypeToggle button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active'); priceType = btn.dataset.type; renderPrice();
+}));
+
+/* ---------- 实时价格 ---------- */
+function fmtPrice(v) { return v == null ? '--' : '$' + v.toLocaleString(undefined, { maximumFractionDigits: 2 }); }
+function fmtChange(v) {
+  if (v == null) return '';
+  const sign = v >= 0 ? '+' : '';
+  return sign + v.toFixed(2) + '% (24h)';
+}
+function loadLive() {
+  fetch('./live.json?t=' + Date.now()).then(r => r.json()).then(json => {
+    document.getElementById('liveBtcPrice').textContent = fmtPrice(json.btc && json.btc.price);
+    document.getElementById('liveEthPrice').textContent = fmtPrice(json.eth && json.eth.price);
+    const btcChange = json.btc && json.btc.change_24h, ethChange = json.eth && json.eth.change_24h;
+    const btcEl = document.getElementById('liveBtcChange'), ethEl = document.getElementById('liveEthChange');
+    btcEl.textContent = fmtChange(btcChange); btcEl.style.color = btcChange >= 0 ? '#1baf7a' : '#e34948';
+    ethEl.textContent = fmtChange(ethChange); ethEl.style.color = ethChange >= 0 ? '#1baf7a' : '#e34948';
+    document.getElementById('liveUpdated').textContent = '更新时间：' + (json.updated_at || '未知') + '（每5分钟自动刷新一次，来源：CoinGecko）';
+  }).catch(e => console.error('live.json加载失败', e));
+}
+loadLive();
+setInterval(loadLive, 30000); // 页面开着的时候每30秒重新读一次文件，不代表数据本身有这么快更新
+
+/* ---------- 恐慌贪婪指数 ---------- */
+function renderFearGreed(rows) {
+  if (!rows.length) return;
+  const last = rows[rows.length - 1];
+  document.getElementById('fgValue').textContent = last.value;
+  document.getElementById('fgLabel').textContent = last.label;
+  new Chart(document.getElementById('fgChart'), {
+    type: 'line',
+    data: { labels: rows.map(r => r.date), datasets: [{ data: rows.map(r => r.value), borderColor: '#c98a2b', backgroundColor: 'rgba(201,138,43,0.12)', fill: true, tension: 0.3, pointRadius: 0, borderWidth: 2 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
+      scales: { x: { ticks: { autoSkip: true, font: { size: 10 } }, grid: { display: false } }, y: { min: 0, max: 100, grid: { color: '#e4e2da' } } } }
   });
+}
+
+fetch('./market.json?t=' + Date.now()).then(r => r.json()).then(json => {
+  marketData.btc = json.btc || []; marketData.eth = json.eth || [];
+  renderPrice();
+  renderFearGreed(json.fear_greed || []);
+  if (json.updated_at) {
+    document.getElementById('priceUpdated').textContent = '数据更新时间：' + json.updated_at + '（来源：CoinGecko）';
+    document.getElementById('fgUpdated').textContent = '数据更新时间：' + json.updated_at + '（来源：alternative.me）';
+  }
+}).catch(e => console.error('market.json加载失败', e));
+
+/* ---------- 美债收益率 ---------- */
+fetch('./yield.json?t=' + Date.now()).then(r => r.json()).then(json => {
+  const rows = json.rows || [];
+  new Chart(document.getElementById('yieldChart'), {
+    type: 'line',
+    data: { labels: rows.map(r => r.date), datasets: [{ data: rows.map(r => r.yield), borderColor: '#2a78d6', backgroundColor: 'rgba(42,120,214,0.1)', fill: true, tension: 0.25, pointRadius: 4, borderWidth: 2 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.raw + '%' } } },
+      scales: { x: { ticks: { font: { size: 10 } }, grid: { display: false } }, y: { ticks: { callback: v => v + '%' }, grid: { color: '#e4e2da' } } } }
+  });
+  document.getElementById('yieldUpdated').textContent = '数据更新时间：' + (json.updated_at || '未知');
+}).catch(e => console.error('yield.json加载失败', e));
 </script>
 </body>
 </html>
