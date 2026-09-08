@@ -12,7 +12,7 @@ OUTPUT_FILE = "data.json"
 PROXY_PREFIX = "https://r.jina.ai/"
 SOURCES = {
     "btc_etf": "https://www.tftc.io/bitcoin-etf-flows",
-    "eth_etf": "https://farside.co.uk/eth/",  # 以太坊专属数据源，格式跟BTC那个不完全一样，识别成功率待验证
+    "eth_etf": "https://www.tftc.io/ethereum-etf-flows",  # 尝试同网站的以太坊页面，格式应该跟BTC一致
 }
 
 MONTHS = {
