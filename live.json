@@ -1,6 +1,11 @@
-
 {
-  "updated_at": null,
-  "btc": {"price": null, "change_24h": null},
-  "eth": {"price": null, "change_24h": null}
+  "updated_at": "2026-09-08 01:34:15 UTC",
+  "btc": {
+    "price": 79341,
+    "change_24h": -0.7484048924043136
+  },
+  "eth": {
+    "price": 2499.93,
+    "change_24h": -0.21128195209186343
+  }
 }
