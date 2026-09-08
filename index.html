@@ -42,8 +42,10 @@
   <div class="sub" id="heroDate">加载中...</div>
 
   <div class="cards">
+    <div class="card"><div class="label">今日净流入</div><div class="value" id="statToday">--</div></div>
     <div class="card"><div class="label">近30日净流入</div><div class="value" id="stat30">--</div></div>
     <div class="card"><div class="label">近90日净流入</div><div class="value" id="stat90">--</div></div>
+    <div class="card"><div class="label">今年累计净流入</div><div class="value" id="statYTD">--</div></div>
     <div class="card"><div class="label">最大单日流入</div><div class="value" id="statMaxIn">--</div></div>
     <div class="card"><div class="label">最大单日流出</div><div class="value" id="statMaxOut">--</div></div>
   </div>
@@ -79,6 +81,12 @@
     <button data-asset="btc" class="active">BTC</button>
     <button data-asset="eth">ETH</button>
   </div>
+  <div class="row" id="priceRangeToggle">
+    <button data-range="day" class="active">日</button>
+    <button data-range="week">周</button>
+    <button data-range="month">月</button>
+    <button data-range="year">年</button>
+  </div>
   <div class="row" id="priceTypeToggle">
     <button data-type="candle" class="active">K线图</button>
     <button data-type="line">折线图</button>
@@ -94,12 +102,23 @@
     <div class="label" id="fgLabel">--</div>
   </div>
   <div class="chart-wrap" style="height:180px;margin-top:12px"><canvas id="fgChart"></canvas></div>
-  <div class="updated" id="fgUpdated">数据来源：alternative.me（近90日，每日自动更新）</div>
+  <div class="updated" id="fgUpdated">数据来源：alternative.me（每日自动更新）</div>
 
   <!-- ============ 美债收益率 ============ -->
   <h2>10年期美债收益率</h2>
+  <div class="row" id="yieldRangeToggle">
+    <button data-range="day" class="active">日</button>
+    <button data-range="week">周</button>
+    <button data-range="month">月</button>
+    <button data-range="year">年</button>
+  </div>
+  <div class="row" id="yieldTypeToggle">
+    <button data-type="line" class="active">折线图</button>
+    <button data-type="curve">曲线图</button>
+    <button data-type="candle">K线图</button>
+  </div>
   <div class="chart-wrap"><canvas id="yieldChart"></canvas></div>
-  <div class="updated" id="yieldUpdated">手动更新，变化较慢，建议每周更新一次</div>
+  <div class="updated" id="yieldUpdated">数据来源：FRED（每日自动更新）</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
@@ -107,15 +126,15 @@ function fmt(v) {
   const sign = v < 0 ? '-' : '+';
   return sign + '$' + Math.abs(v).toFixed(1) + 'M';
 }
+function weekKey(dateStr) {
+  const d = new Date(dateStr);
+  const onejan = new Date(d.getFullYear(), 0, 1);
+  const week = Math.ceil((((d - onejan) / 86400000) + onejan.getDay() + 1) / 7);
+  return d.getFullYear() + '-W' + week;
+}
 function toWeeks(rows) {
   const map = {};
-  rows.forEach(r => {
-    const d = new Date(r.date);
-    const onejan = new Date(d.getFullYear(), 0, 1);
-    const week = Math.ceil((((d - onejan) / 86400000) + onejan.getDay() + 1) / 7);
-    const key = d.getFullYear() + '-W' + week;
-    map[key] = (map[key] || 0) + r.flow;
-  });
+  rows.forEach(r => { const key = weekKey(r.date); map[key] = (map[key] || 0) + r.flow; });
   return Object.entries(map).map(([k, v]) => ({ date: k, flow: v }));
 }
 function toMonths(rows) {
@@ -127,6 +146,24 @@ function toYears(rows) {
   const map = {};
   rows.forEach(r => { const key = r.date.slice(0, 4); map[key] = (map[key] || 0) + r.flow; });
   return Object.entries(map).map(([k, v]) => ({ date: k, flow: v }));
+}
+
+/* ---------- 通用OHLC聚合：把每日K线/数值合并成周/月/年的K线 ---------- */
+function aggregateOHLC(rows, period) {
+  if (period === 'day' || !rows.length) return rows;
+  const keyFn = period === 'week' ? r => weekKey(r.date) : period === 'month' ? r => r.date.slice(0, 7) : r => r.date.slice(0, 4);
+  const map = {};
+  const order = [];
+  rows.forEach(r => {
+    const key = keyFn(r);
+    if (!map[key]) { map[key] = { date: key, o: r.o, h: r.h, l: r.l, c: r.c }; order.push(key); }
+    else {
+      map[key].h = Math.max(map[key].h, r.h);
+      map[key].l = Math.min(map[key].l, r.l);
+      map[key].c = r.c;
+    }
+  });
+  return order.map(k => map[k]);
 }
 
 /* ---------- ETF资金流 ---------- */
@@ -172,11 +209,14 @@ function computeStats() {
     const cutoff = new Date(now); cutoff.setDate(cutoff.getDate() - days);
     return rows.filter(r => new Date(r.date) >= cutoff).reduce((a, r) => a + r.flow, 0);
   };
+  const sumYTD = () => rows.filter(r => r.date.slice(0, 4) === String(now.getFullYear())).reduce((a, r) => a + r.flow, 0);
+  const last = rows[rows.length - 1];
+  document.getElementById('statToday').textContent = fmt(last.flow);
   document.getElementById('stat30').textContent = fmt(sumSince(30));
   document.getElementById('stat90').textContent = fmt(sumSince(90));
+  document.getElementById('statYTD').textContent = fmt(sumYTD());
   document.getElementById('statMaxIn').textContent = fmt(Math.max(...rows.map(r => r.flow)));
   document.getElementById('statMaxOut').textContent = fmt(Math.min(...rows.map(r => r.flow)));
-  const last = rows[rows.length - 1];
   document.getElementById('heroValue').textContent = fmt(last.flow);
   document.getElementById('heroDate').textContent = '最新交易日 ' + last.date;
 }
@@ -202,38 +242,48 @@ fetch('./data.json?t=' + Date.now()).then(r => r.json()).then(json => {
   document.getElementById('flowUpdated').textContent = '数据更新时间：' + (json.updated_at || '未知');
 }).catch(e => console.error('data.json加载失败', e));
 
-/* ---------- 价格K线/折线 ---------- */
-let marketData = { btc: [], eth: [] };
-let priceChart, priceAsset = 'btc', priceType = 'candle';
-
-function renderPrice() {
-  const rows = marketData[priceAsset] || [];
+/* ---------- 通用OHLC图表渲染（价格图和收益率图共用） ---------- */
+function renderOHLCChart(canvasEl, chartHolder, rawRows, range, type, opts) {
+  const rows = aggregateOHLC(rawRows, range);
   const labels = rows.map(r => r.date);
-  if (priceChart) priceChart.destroy();
-  if (priceType === 'line' || priceType === 'curve') {
-    const isCurve = priceType === 'curve';
-    priceChart = new Chart(document.getElementById('priceChart'), {
+  if (chartHolder.chart) chartHolder.chart.destroy();
+  const fmtY = v => opts.unit === 'percent' ? v.toFixed(2) + '%' : '$' + v.toLocaleString();
+  if (type === 'line' || type === 'curve') {
+    const isCurve = type === 'curve';
+    chartHolder.chart = new Chart(canvasEl, {
       type: 'line',
-      data: { labels, datasets: [{ data: rows.map(r => r.c), borderColor: isCurve ? '#c9542b' : '#185fa5', backgroundColor: isCurve ? 'rgba(201,84,43,0.1)' : 'rgba(24,95,165,0.1)', fill: true, tension: isCurve ? 0.4 : 0, pointRadius: 0, borderWidth: 2 }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
-        scales: { x: { ticks: { autoSkip: true, font: { size: 10 } }, grid: { display: false } }, y: { ticks: { callback: v => '$' + v.toLocaleString() }, grid: { color: '#e4e2da' } } } }
+      data: { labels, datasets: [{ data: rows.map(r => r.c), borderColor: isCurve ? '#c9542b' : '#185fa5', backgroundColor: isCurve ? 'rgba(201,84,43,0.1)' : 'rgba(24,95,165,0.1)', fill: true, tension: isCurve ? 0.4 : 0, pointRadius: range === 'day' ? 0 : 2, borderWidth: 2 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => fmtY(c.raw) } } },
+        scales: { x: { ticks: { autoSkip: true, maxRotation: 45, font: { size: 10 } }, grid: { display: false } }, y: { ticks: { callback: fmtY }, grid: { color: '#e4e2da' } } } }
     });
   } else {
     const colors = rows.map(r => r.c >= r.o ? '#1baf7a' : '#e34948');
-    priceChart = new Chart(document.getElementById('priceChart'), {
+    chartHolder.chart = new Chart(canvasEl, {
       type: 'bar',
       data: { labels, datasets: [
-        { label: '影线', data: rows.map(r => [r.l, r.h]), backgroundColor: colors, barThickness: 2, borderSkipped: false },
-        { label: '实体', data: rows.map(r => [Math.min(r.o, r.c), Math.max(r.o, r.c)]), backgroundColor: colors, barThickness: 7, borderSkipped: false }
+        { label: '影线', data: rows.map(r => [r.l, r.h]), backgroundColor: colors, barThickness: range === 'day' ? 2 : 3, borderSkipped: false },
+        { label: '实体', data: rows.map(r => [Math.min(r.o, r.c), Math.max(r.o, r.c)]), backgroundColor: colors, barThickness: range === 'day' ? 7 : 14, borderSkipped: false }
       ]},
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
-        scales: { x: { ticks: { autoSkip: true, font: { size: 10 } }, grid: { display: false } }, y: { ticks: { callback: v => '$' + v.toLocaleString() }, grid: { color: '#e4e2da' } } } }
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => fmtY(c.raw) } } },
+        scales: { x: { ticks: { autoSkip: true, maxRotation: 45, font: { size: 10 } }, grid: { display: false } }, y: { ticks: { callback: fmtY }, grid: { color: '#e4e2da' } } } }
     });
   }
+}
+
+/* ---------- 价格K线/折线/曲线 ---------- */
+let marketData = { btc: [], eth: [] };
+const priceChartHolder = {};
+let priceAsset = 'btc', priceRange = 'day', priceType = 'candle';
+function renderPrice() {
+  renderOHLCChart(document.getElementById('priceChart'), priceChartHolder, marketData[priceAsset] || [], priceRange, priceType, { unit: 'usd' });
 }
 document.querySelectorAll('#priceAssetToggle button').forEach(btn => btn.addEventListener('click', () => {
   document.querySelectorAll('#priceAssetToggle button').forEach(b => b.classList.remove('active'));
   btn.classList.add('active'); priceAsset = btn.dataset.asset; renderPrice();
+}));
+document.querySelectorAll('#priceRangeToggle button').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('#priceRangeToggle button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active'); priceRange = btn.dataset.range; renderPrice();
 }));
 document.querySelectorAll('#priceTypeToggle button').forEach(btn => btn.addEventListener('click', () => {
   document.querySelectorAll('#priceTypeToggle button').forEach(b => b.classList.remove('active'));
@@ -259,7 +309,7 @@ function loadLive() {
   }).catch(e => console.error('live.json加载失败', e));
 }
 loadLive();
-setInterval(loadLive, 30000); // 页面开着的时候每30秒重新读一次文件，不代表数据本身有这么快更新
+setInterval(loadLive, 30000);
 
 /* ---------- 恐慌贪婪指数 ---------- */
 function renderFearGreed(rows) {
@@ -285,15 +335,26 @@ fetch('./market.json?t=' + Date.now()).then(r => r.json()).then(json => {
   }
 }).catch(e => console.error('market.json加载失败', e));
 
-/* ---------- 美债收益率 ---------- */
+/* ---------- 美债收益率：折线/曲线/K线 + 日周月年 ---------- */
+let yieldRows = [];
+const yieldChartHolder = {};
+let yieldRange = 'day', yieldType = 'line';
+function renderYield() {
+  const ohlcRows = yieldRows.map(r => ({ date: r.date, o: r.yield, h: r.yield, l: r.yield, c: r.yield }));
+  renderOHLCChart(document.getElementById('yieldChart'), yieldChartHolder, ohlcRows, yieldRange, yieldType, { unit: 'percent' });
+}
+document.querySelectorAll('#yieldRangeToggle button').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('#yieldRangeToggle button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active'); yieldRange = btn.dataset.range; renderYield();
+}));
+document.querySelectorAll('#yieldTypeToggle button').forEach(btn => btn.addEventListener('click', () => {
+  document.querySelectorAll('#yieldTypeToggle button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active'); yieldType = btn.dataset.type; renderYield();
+}));
+
 fetch('./yield.json?t=' + Date.now()).then(r => r.json()).then(json => {
-  const rows = json.rows || [];
-  new Chart(document.getElementById('yieldChart'), {
-    type: 'line',
-    data: { labels: rows.map(r => r.date), datasets: [{ data: rows.map(r => r.yield), borderColor: '#2a78d6', backgroundColor: 'rgba(42,120,214,0.1)', fill: true, tension: 0.25, pointRadius: 4, borderWidth: 2 }] },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.raw + '%' } } },
-      scales: { x: { ticks: { font: { size: 10 } }, grid: { display: false } }, y: { ticks: { callback: v => v + '%' }, grid: { color: '#e4e2da' } } } }
-  });
+  yieldRows = json.rows || [];
+  renderYield();
   document.getElementById('yieldUpdated').textContent = '数据更新时间：' + (json.updated_at || '未知');
 }).catch(e => console.error('yield.json加载失败', e));
 </script>
