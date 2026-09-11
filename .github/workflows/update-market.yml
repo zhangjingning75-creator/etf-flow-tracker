@@ -1,8 +1,8 @@
-name: 实时更新BTC-ETH价格
+name: 每日更新价格与情绪指数
 
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "0 13 * * *"
   workflow_dispatch: {}
 
 permissions:
@@ -21,16 +21,16 @@ jobs:
           python-version: "3.11"
 
       - name: 运行抓取脚本
-        run: python scripts/update_live_price.py
+        run: python scripts/update_market.py
 
-      - name: 提交更新后的live.json
+      - name: 提交更新后的market.json
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet live.json; then
-            echo "价格没有变化，不需要提交。"
+          if git diff --quiet market.json; then
+            echo "数据没有变化，不需要提交。"
           else
-            git add live.json
-            git commit -m "自动更新实时价格"
+            git add market.json
+            git commit -m "自动更新价格与情绪指数"
             git push
           fi
