@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-21 19:59 UTC",
+  "updated_at": "2026-11-22 20:14 UTC",
   "btc": [
     {
       "date": "2026-08-23",
@@ -327,11 +327,6 @@
     }
   ],
   "fear_greed": [
-    {
-      "date": "2026-08-24",
-      "value": 73,
-      "label": "Greed"
-    },
     {
       "date": "2026-08-25",
       "value": 74,
@@ -775,6 +770,11 @@
     {
       "date": "2026-11-21",
       "value": 12,
+      "label": "Extreme Fear"
+    },
+    {
+      "date": "2026-11-22",
+      "value": 11,
       "label": "Extreme Fear"
     }
   ]
